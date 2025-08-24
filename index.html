@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Journey Tips</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<link rel="stylesheet" href="source.css"/>
+
+</head>
+<body>
+
+<h1>Journey Tips</h1>
+
+<div id="map"></div>
+
+<form id="journeyForm">
+  <label for="arrivalDate">Arrival Date:</label>
+  <input type="date" id="arrivalDate" required>
+
+  <label for="departureDate">Departure Date:</label>
+  <input type="date" id="departureDate" required>
+
+  <button type="submit">Find Events</button>
+</form>
+
+<div id="events"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+  const map = L.map('map').setView([20, 0], 2);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+  let marker;
+
+  map.on('click', function(e) {
+    const { lat, lng } = e.latlng;
+    if(marker) map.removeLayer(marker);
+    marker = L.marker([lat, lng]).addTo(map);
+    marker.bindPopup(`Destination selected:<br>Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`).openPopup();
+    marker.lat = lat;
+    marker.lng = lng;
+  });
+
+  document.getElementById('journeyForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    if(!marker) {
+      alert('Please select a destination on the map!');
+      return;
+    }
+
+    const arrival = document.getElementById('arrivalDate').value;
+    const departure = document.getElementById('departureDate').value;
+
+    const eventsDiv = document.getElementById('events');
+    eventsDiv.innerHTML = '<p>Fetching events...</p>';
+
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer <key>',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.0-flash-exp:free',
+          messages: [
+            {
+              role: 'user',
+              content: `List interesting events happening at latitude ${marker.lat}, longitude ${marker.lng} between ${arrival} and ${departure}. Also list if something bad will happen like road closeures or protests`,
+            },
+          ],
+        }),
+      });
+
+      const data = await response.json();
+      const aiMessage = data.choices?.[0]?.message?.content || "No events found.";
+
+      eventsDiv.innerHTML = `<h2 style="text-align:center;">AI Suggested Events</h2>
+                             <p>${aiMessage.replace(/\n/g, '<br>')}</p>`;
+
+    } catch (error) {
+      console.error(error);
+      eventsDiv.innerHTML = '<p>Failed to fetch events. Please try again later.</p>';
+    }
+  });
+</script>
+
+
+</body>
+</html>
